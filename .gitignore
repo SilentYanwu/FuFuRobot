@@ -9,3 +9,4 @@ __pycache__/
 *.so
 .Python
 backend/.env
+user_memory.json
