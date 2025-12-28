@@ -1,8 +1,7 @@
-
 <template>
   <div class="w-full h-80 my-6 bg-white rounded-xl shadow-lg p-4 border border-gray-100">
-    <v-chart 
-      :option="chartOption" 
+    <v-chart
+      :option="chartOption"
       :loading="loading"
       :loading-options="loadingOptions"
       autoresize
@@ -20,7 +19,7 @@ import {
   TitleComponent,
   TooltipComponent,
   LegendComponent,
-  GridComponent
+  GridComponent,
 } from 'echarts/components'
 import { useCharts } from '@/composables/useCharts'
 
@@ -31,7 +30,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  config: () => ({})
+  config: () => ({}),
 })
 
 // 注册必要的组件
@@ -44,7 +43,7 @@ use([
   TitleComponent,
   TooltipComponent,
   LegendComponent,
-  GridComponent
+  GridComponent,
 ])
 
 const { generateChartOption, preprocessChartData } = useCharts()
@@ -65,13 +64,17 @@ const loadingOptions = {
   color: '#3498db',
   textColor: '#000',
   maskColor: 'rgba(255, 255, 255, 0.8)',
-  zlevel: 0
+  zlevel: 0,
 }
 
 // 监听数据变化
-watch(() => props.data, () => {
-  loading.value = false
-}, { immediate: true })
+watch(
+  () => props.data,
+  () => {
+    loading.value = false
+  },
+  { immediate: true },
+)
 </script>
 
 <style scoped>

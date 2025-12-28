@@ -10,3 +10,4 @@ __pycache__/
 .Python
 backend/.env
 user_memory.json
+node_modules/

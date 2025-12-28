@@ -97,7 +97,6 @@ def main():
     print(f"{APP_NAME} v{APP_VERSION}")
     print(f"启动服务器: http://{BACKEND_HOST}:{BACKEND_PORT}")
     print(f"API文档: http://{BACKEND_HOST}:{BACKEND_PORT}/docs")
-    print("现在等待6秒来启动前端服务器...")
     print("=" * 50)
     
     uvicorn.run(

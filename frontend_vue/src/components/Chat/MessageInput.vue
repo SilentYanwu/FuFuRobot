@@ -1,17 +1,14 @@
-
 <template>
   <div class="input-box">
-    <input 
+    <input
       v-model="inputText"
-      type="text" 
+      type="text"
       :placeholder="placeholder"
       @keypress="handleKeyPress"
       autocomplete="off"
       class="flex-1"
     />
-    <button @click="handleSend" :disabled="!inputText.trim() || isLoading">
-      发送
-    </button>
+    <button @click="handleSend" :disabled="!inputText.trim() || isLoading">发送</button>
   </div>
 </template>
 

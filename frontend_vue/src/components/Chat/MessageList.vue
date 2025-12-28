@@ -1,11 +1,6 @@
-
 <template>
   <div ref="messagesContainer" class="messages-box">
-    <Message 
-      v-for="message in messages" 
-      :key="message.id" 
-      :message="message" 
-    />
+    <Message v-for="message in messages" :key="message.id" :message="message" />
 
     <!-- 加载状态 -->
     <div v-if="isLoading" class="message ai">
@@ -34,6 +29,6 @@ const messagesContainer = ref<HTMLElement | null>(null)
 
 // 暴露给父组件
 defineExpose({
-  messagesContainer
+  messagesContainer,
 })
 </script>

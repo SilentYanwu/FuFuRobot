@@ -1,4 +1,3 @@
-
 <template>
   <div class="loading-dots">
     <span></span>
