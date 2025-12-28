@@ -1,0 +1,136 @@
+@import 'tailwindcss';
+
+@layer components {
+  /* 自定义组件样式 */
+  .chat-container {
+    @apply flex w-full max-w-7xl h-[90vh] bg-white/20 backdrop-blur-lg rounded-2xl shadow-2xl overflow-hidden;
+  }
+
+  .sidebar {
+    @apply w-80 bg-linear-to-b from-slate-800/90 to-slate-900/90 text-white p-8 flex flex-col relative z-10;
+  }
+
+  .chat-area {
+    @apply flex-1 flex flex-col bg-transparent relative;
+  }
+
+  .chat-header {
+    @apply py-6 px-8 bg-white/10 border-b border-white/20 font-bold text-xl text-slate-700 flex justify-between items-center shadow-sm;
+  }
+
+  .messages-box {
+    @apply flex-1 overflow-y-auto p-8 flex flex-col gap-6 bg-slate-50/10;
+  }
+
+  .message {
+    @apply flex max-w-[80%];
+  }
+
+  .message.user {
+    @apply self-end;
+  }
+
+  .message.ai {
+    @apply self-start;
+  }
+
+  .bubble {
+    @apply py-4 px-6 rounded-2xl text-base leading-relaxed shadow-md relative break-words;
+  }
+
+  .message.user .bubble {
+    @apply bg-linear-to-r from-indigo-500 to-purple-600 text-white rounded-br-sm;
+  }
+
+  .message.ai .bubble {
+    @apply bg-white text-slate-700 rounded-bl-sm border border-gray-100;
+  }
+
+  .message-avatar {
+    @apply w-9 h-9 rounded-full flex items-center justify-center mr-3 flex-shrink-0 overflow-hidden;
+  }
+
+  .message-avatar img {
+    @apply w-full h-full rounded-full object-cover border-2 border-white shadow-sm;
+  }
+
+  .message.ai .message-avatar {
+    @apply bg-linear-to-r from-blue-500 to-slate-700 text-white;
+  }
+
+  .message.user .message-avatar {
+    @apply bg-linear-to-r from-indigo-500 to-purple-600 text-white mr-0 ml-3;
+  }
+
+  .message-content {
+    @apply flex-1;
+  }
+
+  .message-time {
+    @apply text-xs text-gray-500 mt-1 text-right;
+  }
+
+  .message.user .message-time {
+    @apply text-white/70;
+  }
+
+  .input-box {
+    @apply py-6 px-8 bg-white/20 border-t border-white/20 flex gap-4 items-center shadow-sm;
+  }
+
+  .input-box input {
+    @apply flex-1 py-4 px-5 border-2 border-gray-100 rounded-full text-base outline-none transition-all bg-slate-50/50 text-slate-700 focus:border-blue-400;
+  }
+
+  .input-box button {
+    @apply py-4 px-9 bg-linear-to-r from-indigo-500 to-purple-600 text-white border-none rounded-full text-base font-semibold cursor-pointer transition-all flex items-center gap-2 tracking-wide hover:shadow-lg;
+  }
+
+  .nav-item {
+    @apply flex items-center py-4 px-4 mb-2 rounded-xl cursor-pointer transition-all bg-white/5 border-2 border-transparent hover:bg-blue-500/20 hover:translate-x-1;
+  }
+
+  .nav-item.active {
+    @apply bg-blue-500/30 border-blue-500 shadow-lg;
+  }
+
+  .tips {
+    @apply mt-auto bg-black/20 p-4 rounded-lg border-l-3 border-slate-700 text-xs leading-relaxed text-gray-400;
+  }
+
+  .loading-dots {
+    @apply inline-flex items-center gap-1;
+  }
+
+  .loading-dots span {
+    @apply w-2 h-2 rounded-full bg-blue-500;
+    animation: loading 1.4s infinite ease-in-out both;
+  }
+
+  @keyframes loading {
+    0%,
+    80%,
+    100% {
+      transform: scale(0);
+      opacity: 0.5;
+    }
+    40% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+@layer utilities {
+}
