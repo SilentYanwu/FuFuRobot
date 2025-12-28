@@ -1,8 +1,11 @@
 # backend/llm/chart_analyzer.py
 import re
 import pandas as pd
+import requests
+import json
 from typing import Dict, Any
 import warnings
+from backend.config import DEEPSEEK_API_KEY, DEEPSEEK_API_URL, DEEPSEEK_MODEL
 
 warnings.filterwarnings('ignore', category=UserWarning, module='pandas')
 
@@ -53,7 +56,7 @@ def analyze_data_for_chart_with_instruction(df: pd.DataFrame, sql: str, user_inp
         
         # 4. 尝试转换为日期时间
         try:
-            temp_datetime = pd.to_datetime(df[col], errors='coerce', infer_datetime_format=True)
+            temp_datetime = pd.to_datetime(df[col], errors='coerce')
             if temp_datetime.notna().mean() > 0.5:  # 超过50%能转换
                 df[col] = temp_datetime
                 datetime_cols.append(col)
@@ -72,65 +75,17 @@ def analyze_data_for_chart_with_instruction(df: pd.DataFrame, sql: str, user_inp
         "animation": True
     }
     
-    # 1. 用户明确指定了图表类型
-    if instruction["explicit_chart_type"]:
-        chart_type = instruction["explicit_chart_type"]
-        
-        # 根据用户选择的图表类型生成配置
-        if chart_type == "bar_chart":
-            config = _generate_bar_chart_config(df, instruction["requirements"], 
-                                               numeric_cols, categorical_cols)
-        elif chart_type == "line_chart":
-            config = _generate_line_chart_config(df, instruction["requirements"], 
-                                                numeric_cols, categorical_cols, datetime_cols)
-        elif chart_type == "pie_chart":
-            config = _generate_pie_chart_config(df, instruction["requirements"], 
-                                               numeric_cols, categorical_cols)
-        elif chart_type == "scatter_chart":
-            config = _generate_scatter_chart_config(df, instruction["requirements"], 
-                                                   numeric_cols, categorical_cols)
-        else:
-            # 其他图表类型使用智能推荐
-            config = _get_smart_chart_config(df, sql, numeric_cols, categorical_cols, datetime_cols)
-            chart_type = config.get("chart_type", "bar_chart")
-        
-        # 更新用户要求
-        config.update(default_config)
-        if "title" in instruction["requirements"]:
-            config["title"] = instruction["requirements"]["title"]
-        
-        return {
-            "chart_type": chart_type,
-            "config": config,
-            "instruction_followed": True,
-            "explicit_instruction": instruction
-        }
+    # 直接智能推荐
+    config = _call_deepseek_for_chart(user_input, df, sql, numeric_cols, categorical_cols, datetime_cols)
+    config.update(default_config)
     
-    # 2. 用户有特定要求但未指定图表类型
-    elif instruction["requirements"]:
-        # 根据用户要求和数据特征智能选择图表
-        config = _get_chart_by_requirements(df, instruction["requirements"], 
-                                          numeric_cols, categorical_cols, datetime_cols)
-        config.update(default_config)
+    return {
+        "chart_type": config["chart_type"],
+        "config": config,
+        "instruction_followed": False,
+        "explicit_instruction": instruction
+    }
         
-        return {
-            "chart_type": config["chart_type"],
-            "config": config,
-            "instruction_followed": True,
-            "explicit_instruction": instruction
-        }
-    
-    # 3. 完全智能推荐（用户无明确要求）
-    else:
-        config = _get_smart_chart_config(df, sql, numeric_cols, categorical_cols, datetime_cols)
-        config.update(default_config)
-        
-        return {
-            "chart_type": config["chart_type"],
-            "config": config,
-            "instruction_followed": False,
-            "explicit_instruction": instruction
-        }
 
 def _extract_chart_instruction(user_input: str) -> Dict[str, Any]:
     """
@@ -225,146 +180,204 @@ def _extract_chart_instruction(user_input: str) -> Dict[str, Any]:
         "has_chart_instruction": explicit_chart_type is not None or len(requirements) > 0
     }
 
-def _generate_bar_chart_config(df, requirements, numeric_cols, categorical_cols):
-    """生成柱状图配置"""
-    config = {"chart_type": "bar_chart"}
+def _call_deepseek_for_chart(user_input: str, df, sql, numeric_cols, categorical_cols, datetime_cols) -> dict:
+    """
+    调用DeepSeek API智能选择图表类型和配置
+    """
+    # 准备数据信息
+    data_info = {
+        "columns": df.columns.tolist(),
+        "shape": df.shape,
+        "numeric_cols": numeric_cols,
+        "categorical_cols": categorical_cols,
+        "datetime_cols": datetime_cols
+    }
+
+    # 构建系统提示 - 优化版本
+    system_prompt = f"""你是一个专业而且智能的数据可视化助手。根据用户的输入、sql语句和数据特征，智能选择最适合的图表类型并返回对应的配置参数。
+
+数据信息：
+- 数据列: {data_info["columns"]}
+- 数据形状: {data_info["shape"]}
+- 数值列: {data_info["numeric_cols"]}
+- 分类列: {data_info["categorical_cols"]}
+- 日期时间列: {data_info["datetime_cols"]}
+
+用户输入: {user_input}
+使用的sql语句：{sql}
+
+根据不同的图表类型，请返回对应的JSON配置：
+
+1. 柱状图 (bar_chart):
+{{
+    "chart_type": "bar_chart",
+    "x_axis": "X轴数据列名",
+    "y_axis": "Y轴数据列名",
+    "title": "图表标题",
+    "orientation": "vertical"  # 可选: vertical或horizontal
+}}
+
+2. 折线图 (line_chart):
+{{
+    "chart_type": "line_chart",
+    "x_axis": "X轴数据列名",
+    "y_axis": "Y轴数据列名",
+    "title": "图表标题",
+    "smooth": true  # 可选: true或false，是否平滑曲线
+}}
+
+3. 饼图 (pie_chart):
+{{
+    "chart_type": "pie_chart",
+    "x_axis": "对应的柱状图的X数据列名",
+    "y_axis": "对应的柱状图的Y轴数据列名",
+    "name_col": "分类列名（显示在饼图上的名称）",
+    "value_col": "数值列名（决定扇形大小的数值）",
+    "title": "图表标题"
+}}
+
+4. 散点图 (scatter_chart):
+{{
+    "chart_type": "scatter_chart",
+    "x_axis": "X轴数据列名",
+    "y_axis": "Y轴数据列名",
+    "title": "图表标题",
+    "size_col": "可选，决定点大小的列名",
+    "color_col": "可选，决定点颜色的列名"
+}}
+
+5. 多系列柱状图 (multi_bar_chart):
+{{
+    "chart_type": "multi_bar_chart",
+    "x_axis": "X轴数据列名",
+    "y_axes": ["数值列1", "数值列2", ...],
+    "title": "图表标题"
+}}
+
+图表选择规则：
+1. 比较分类数据 -> 柱状图
+2. 显示趋势变化 -> 折线图（特别适合时间序列）
+3. 显示占比分布 -> 饼图（数据类别不超过10个）
+4. 显示相关性 -> 散点图
+5. 比较多个数值维度 -> 多系列柱状图
+
+重要指导原则：
+1. 如果用户在输入中明确指定了图表类型，请严格按照用户指定的类型生成配置
+2. 优先使用合适的列：时间序列用datetime_cols，分类用categorical_cols，数值用numeric_cols
+3. 饼图只适合显示占比，不适合精确比较
+4. 散点图需要两个数值列
+5. 图表标题要简洁明了，体现数据洞察
+
+请根据数据分析结果返回JSON格式的图表配置，只返回JSON，不要其他任何内容！
+"""
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": f"请基于以上数据和查询，智能推荐最适合的图表配置。\n用户输入: {user_input}\n\n请只返回JSON配置:"}
+    ]
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {DEEPSEEK_API_KEY}"
+    }
+
+    payload = {
+        "model": DEEPSEEK_MODEL,
+        "messages": messages,
+        "stream": False,
+        "max_tokens": 800,
+        "temperature": 0.1,
+        "top_p": 0.9
+    }
+
+    try:
+        response = requests.post(
+            DEEPSEEK_API_URL,
+            headers=headers,
+            json=payload,
+            timeout=30
+        )
+        response.raise_for_status()
+
+        print("请求成功，内容为" + response.text)
+
+        data = response.json()
+
+        if "choices" not in data or len(data["choices"]) == 0:
+            raise ValueError("API响应格式错误")
+
+        config_str = data["choices"][0]["message"]["content"].strip()
+
+        # 解析JSON
+        try:
+            # 清理可能的代码块标记
+            if config_str.startswith('```json'):
+                config_str = config_str[7:]
+            if config_str.startswith('```'):
+                config_str = config_str[3:]
+            if config_str.endswith('```'):
+                config_str = config_str[:-3]
+            config_str = config_str.strip()
+
+            print(f"清理后的JSON字符串: {config_str}")
+            config = json.loads(config_str)
+            
+            # 验证配置的完整性
+            config = _validate_chart_config(config, df, numeric_cols, categorical_cols, datetime_cols)
+            return config
+            
+        except json.JSONDecodeError as e:
+            print(f"JSON解析失败: {str(e)}, 使用默认智能推荐配置")
+            return _get_smart_chart_config(df, sql, numeric_cols, categorical_cols, datetime_cols)
+
+    except requests.exceptions.RequestException as e:
+        print(f"API请求失败: {str(e)}, 使用默认智能推荐配置")
+        return _get_smart_chart_config(df, sql, numeric_cols, categorical_cols, datetime_cols)
+    except (KeyError, IndexError, ValueError) as e:
+        print(f"配置处理失败: {str(e)}, 使用默认智能推荐配置")
+        return _get_smart_chart_config(df, sql, numeric_cols, categorical_cols, datetime_cols)
+
+def _validate_chart_config(config, df, numeric_cols, categorical_cols, datetime_cols):
+    """验证和修正图表配置"""
+    chart_type = config.get("chart_type", "")
     
-    # 确定X轴
-    if "x_axis" in requirements:
-        config["x_axis"] = requirements["x_axis"]
-    elif categorical_cols:
-        config["x_axis"] = categorical_cols[0]
-    else:
-        config["x_axis"] = df.columns[0] if len(df.columns) > 0 else "category"
+    # 验证必要的字段存在
+    if chart_type == "bar_chart":
+        if "x_axis" not in config or "y_axis" not in config:
+            config["x_axis"] = categorical_cols[0] if categorical_cols else df.columns[0]
+            config["y_axis"] = numeric_cols[0] if numeric_cols else df.columns[1] if len(df.columns) > 1 else df.columns[0]
     
-    # 确定Y轴
-    if "y_axis" in requirements:
-        config["y_axis"] = requirements["y_axis"]
-    elif numeric_cols:
-        config["y_axis"] = numeric_cols[0]
-    else:
-        # 如果没有数值列，使用计数
-        config["y_axis"] = "count"
-        config["show_values"] = True
+    elif chart_type == "line_chart":
+        if "x_axis" not in config or "y_axis" not in config:
+            if datetime_cols:
+                config["x_axis"] = datetime_cols[0]
+            else:
+                config["x_axis"] = categorical_cols[0] if categorical_cols else df.columns[0]
+            config["y_axis"] = numeric_cols[0] if numeric_cols else df.columns[1] if len(df.columns) > 1 else df.columns[0]
     
-    # 应用排序要求
-    if requirements.get("sorted"):
-        config["sorted"] = True
-        config["sort_order"] = requirements.get("sort_order", "desc")
+    elif chart_type == "pie_chart":
+        if "name_col" not in config:
+            config["name_col"] = categorical_cols[0] if categorical_cols else df.columns[0]
+        if "value_col" not in config:
+            config["value_col"] = numeric_cols[0] if numeric_cols else df.columns[1] if len(df.columns) > 1 else df.columns[0]
     
-    # 应用限制
-    if "limit" in requirements:
-        config["limit"] = requirements["limit"]
+    elif chart_type == "scatter_chart":
+        if "x_axis" not in config:
+            config["x_axis"] = numeric_cols[0] if numeric_cols else df.columns[0]
+        if "y_axis" not in config:
+            config["y_axis"] = numeric_cols[1] if len(numeric_cols) > 1 else df.columns[1] if len(df.columns) > 1 else df.columns[0]
     
-    # 添加默认标题
-    if "x_axis" in config and "y_axis" in config:
-        config["title"] = f"{config['y_axis']} 按 {config['x_axis']} 统计"
+    elif chart_type == "multi_bar_chart":
+        if "x_axis" not in config:
+            config["x_axis"] = categorical_cols[0] if categorical_cols else df.columns[0]
+        if "y_axes" not in config:
+            config["y_axes"] = numeric_cols[:3] if numeric_cols else [df.columns[1]] if len(df.columns) > 1 else [df.columns[0]]
+    
+    # 确保标题存在
+    if "title" not in config:
+        config["title"] = f"{chart_type.replace('_', ' ').title()} - 数据分析"
     
     return config
-
-def _generate_line_chart_config(df, requirements, numeric_cols, categorical_cols, datetime_cols):
-    """生成折线图配置"""
-    config = {"chart_type": "line_chart"}
-    
-    # 优先使用时间序列作为X轴
-    if datetime_cols:
-        config["x_axis"] = datetime_cols[0]
-    elif "x_axis" in requirements:
-        config["x_axis"] = requirements["x_axis"]
-    elif categorical_cols:
-        config["x_axis"] = categorical_cols[0]
-    else:
-        config["x_axis"] = df.columns[0] if len(df.columns) > 0 else "x"
-    
-    # Y轴
-    if "y_axis" in requirements:
-        config["y_axis"] = requirements["y_axis"]
-    elif numeric_cols:
-        config["y_axis"] = numeric_cols[0]
-    else:
-        config["y_axis"] = "value"
-    
-    # 是否平滑曲线
-    config["smooth"] = True
-    
-    if "x_axis" in config and "y_axis" in config:
-        config["title"] = f"{config['y_axis']} 趋势图"
-    
-    return config
-
-def _generate_pie_chart_config(df, requirements, numeric_cols, categorical_cols):
-    """生成饼图配置"""
-    config = {"chart_type": "pie_chart"}
-    
-    # 饼图需要名称列和值列
-    if categorical_cols:
-        config["name_col"] = categorical_cols[0]
-    else:
-        config["name_col"] = df.columns[0] if len(df.columns) > 0 else "category"
-    
-    if numeric_cols:
-        config["value_col"] = numeric_cols[0]
-    else:
-        # 如果没有数值列，使用计数
-        config["value_col"] = "count"
-    
-    # 限制数据数量（饼图不宜过多分类）
-    config["limit"] = 10
-    
-    config["title"] = f"{config['name_col']} 分布"
-    
-    return config
-
-def _generate_scatter_chart_config(df, requirements, numeric_cols, categorical_cols):
-    """生成散点图配置"""
-    config = {"chart_type": "scatter_chart"}
-    
-    # 散点图需要两个数值轴
-    if len(numeric_cols) >= 2:
-        config["x_axis"] = numeric_cols[0]
-        config["y_axis"] = numeric_cols[1]
-    elif numeric_cols:
-        config["x_axis"] = numeric_cols[0]
-        config["y_axis"] = numeric_cols[0]
-    else:
-        config["x_axis"] = df.columns[0] if len(df.columns) > 0 else "x"
-        config["y_axis"] = df.columns[1] if len(df.columns) > 1 else df.columns[0]
-    
-    # 如果有分类列，可以用作颜色或形状
-    if categorical_cols and len(categorical_cols) > 0:
-        config["color_by"] = categorical_cols[0]
-    
-    config["title"] = f"{config['y_axis']} 与 {config['x_axis']} 关系"
-    
-    return config
-
-def _get_chart_by_requirements(df, requirements, numeric_cols, categorical_cols, datetime_cols):
-    """根据用户要求选择图表"""
-    
-    # 检查用户要求特征
-    has_x_axis = "x_axis" in requirements
-    has_y_axis = "y_axis" in requirements
-    has_limit = "limit" in requirements
-    
-    # 判断逻辑
-    if has_x_axis and has_y_axis:
-        # 如果有两个轴，可能是散点图或折线图
-        if datetime_cols and requirements.get("x_axis") in datetime_cols:
-            return _generate_line_chart_config(df, requirements, numeric_cols, categorical_cols, datetime_cols)
-        else:
-            return _generate_scatter_chart_config(df, requirements, numeric_cols, categorical_cols)
-    
-    elif has_x_axis or has_y_axis:
-        # 只有一个轴，可能是柱状图
-        return _generate_bar_chart_config(df, requirements, numeric_cols, categorical_cols)
-    
-    elif has_limit and len(categorical_cols) > 0:
-        # 有数量限制和分类数据，适合饼图
-        return _generate_pie_chart_config(df, requirements, numeric_cols, categorical_cols)
-    
-    else:
-        # 默认智能推荐
-        return _get_smart_chart_config(df, "", numeric_cols, categorical_cols, datetime_cols)
 
 def _get_smart_chart_config(df, sql, numeric_cols, categorical_cols, datetime_cols):
     """智能图表推荐"""
