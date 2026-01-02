@@ -37,7 +37,7 @@
 
         <!-- 操作结果 -->
         <div v-if="operationResult" class="operation-result success">
-          <p>✅ {{ content }}</p>
+          <div>✅ v-html="content"</div>
           <div class="operation-details">
             <small>操作详情: {{ JSON.stringify(operationResult) }}</small>
           </div>

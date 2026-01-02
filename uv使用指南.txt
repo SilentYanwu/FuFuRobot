@@ -1,5 +1,5 @@
 （对于conda环境的用户）
-1. conda activate uv_wk
+1. conda activate uv_env
 
 （有uv环境的直接进入这一步）
 2. uv venv .venv
