@@ -16,8 +16,16 @@
 }
 
 .logo::before {
-    content: "🤖";
-    font-size: 32px;
+    content: "";
+    display: inline-block;
+    width: 35px;
+    height: 35px;
+    background-image: url(../favicon.ico);
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    margin-right: 10px;
+    vertical-align: middle;
 }
 
 /* ===== 导航组件 ===== */
@@ -30,9 +38,25 @@
     text-transform: uppercase;
     letter-spacing: 2px;
     color: #95a5a6;
-    margin-bottom: 15px;
     font-weight: 600;
+    
+    /* 优化部分 */
+    width: 60%;               
+    text-align: center;       
+    margin: 0 auto 15px auto;
 }
+
+.nav-group span{
+    font-size: 15px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #b0cfd1;
+    font-weight: 600;
+    display: block;
+    text-align: center;
+    margin: 10px auto 10px auto;
+}
+
 
 .nav-item {
     display: flex;

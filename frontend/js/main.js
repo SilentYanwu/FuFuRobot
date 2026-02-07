@@ -58,10 +58,10 @@ class ChatApplication {
         const mode = getCurrentMode();
         
         if (mode === 'chat') {
-            userInput.placeholder = "和芙芙聊天，分享你的日常...";
+            userInput.placeholder = "芙芙：最近有什么好玩...";
         } else if (mode === 'focus') {
             // 纳西妲的提示语
-            userInput.placeholder = "🍃 纳西妲：请告诉我你想要了解的世间真理吧...";
+            userInput.placeholder = "纳西妲：请告诉我你想要了解的世间真理吧...";
         } else {
             userInput.placeholder = "请输入数据查询指令，如：查询所有学生...";
         }

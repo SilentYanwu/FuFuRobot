@@ -85,7 +85,7 @@ FRONTEND_PORT=8080
 
 或者直接下载requirements.txt文件的库，使用pip install -r requirements.txt安装依赖
 
-然后在资源管理器里双击start.bat即可启动
+然后在资源管理器里双击start_new.bat（Vue框架）或者start_old.bat（HTML+CSS+JS）即可启动
 
 ***
 ## 声明

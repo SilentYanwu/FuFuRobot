@@ -93,7 +93,7 @@ echo ✅ 系统启动完成！
 echo =======================================================
 echo.
 echo 📡 服务信息:
-echo    • Vue前端: http://127.0.0.1:5173/
+echo    • Vue前端: http://localhost:5173/
 echo    • 后端API: http://127.0.0.1:8000/
 echo    • API文档: http://127.0.0.1:8000/docs
 echo.

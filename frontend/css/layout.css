@@ -7,9 +7,9 @@
     max-width: 1400px;
     height: 90vh;
     /* 改为 10% 不透明度的白色，*/
-    background: rgba(255, 255, 255, 0.2); 
+    background: rgba(255, 255, 255, 0.2);
     /* 建议添加一个背景模糊效果，让文字更清晰（毛玻璃特效） */
-    backdrop-filter: blur(10px); 
+    backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     border-radius: 20px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
@@ -33,33 +33,167 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    background: transparent; 
+    background: transparent;
     position: relative;
 }
 
 /* ===== 响应式设计 ===== */
-@media (max-width: 1024px) {
+/* 平板尺寸 */
+@media screen and (max-width: 992px) {
+    body {
+        height: auto;
+        /* 允许 body 高度自适应内容 */
+        min-height: 100vh;
+        overflow-y: auto;
+    }
+
     .app-container {
         flex-direction: column;
-        height: 95vh;
+        height: auto;
+        /* 容器高度由内容决定，不再固定视口高度 */
+        min-height: 100vh;
+        overflow: visible;
+        /* 移除溢出隐藏，允许内容撑开 */
     }
-    
+
     .sidebar {
         width: 100%;
-        padding: 20px;
+        height: 30%;
+        padding: 6px 66px;
         flex-direction: row;
-        justify-content: space-between;
-        flex-wrap: wrap;
+        justify-content: flex-start;
+        align-items: center;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        min-height: 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background: rgba(44, 62, 80, 0.95);
+        display: flex;
+        border-bottom-left-radius: 30px;
+        border-bottom-right-radius: 30px;
+
+    }
+
+    .nav-group {
+        flex-direction: row;
+        gap: 20px;
+        padding: 10px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .nav-item {
+        margin-bottom: 0;
+        padding: 10px 15px;
+        font-size: 16px;
+        flex: auto;
+    }
+
+    /* 隐藏侧边栏底部的一些装饰性元素或提示框，以节省空间 */
+    .sidebar .tips {
+        display: none;
+        height: 20%;
+    }
+
+    /* 确保聊天区域可以正常显示，高度自适应 */
+    .chat-area {
+        min-height: 500px;
+        /* 设置一个最小高度 */
     }
 }
 
-@media (max-width: 768px) {
+/* 手机尺寸 */
+@media screen and (max-width: 768px) {
     body {
-        padding: 10px;
+        padding: 0;
     }
-    
+
     .app-container {
-        height: 100vh;
-        border-radius: 10px;
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    /* 进一步优化侧边栏，使其更像一个顶部导航栏 */
+    .sidebar {
+        padding: 10px 15px;
+        overflow-x: auto;
+        /* 确保侧边栏可以横向滚动 */
+        overflow-y: hidden;
+        /* 防止纵向滚动 */
+        white-space: nowrap;
+        /* 防止内容换行 */
+        position: relative;
+        background: rgba(44, 62, 80, 0.95);
+        /* 添加滚动指示条 */
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+    }
+
+    /* 自定义滚动条样式 */
+    .sidebar::-webkit-scrollbar {
+        height: 4px;
+    }
+
+    .sidebar::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .sidebar::-webkit-scrollbar-thumb {
+        background-color: rgba(255, 255, 255, 0.3);
+        border-radius: 4px;
+    }
+
+    /* 调整 Logo 区域 */
+    .logo {
+        margin-bottom: 0;
+        padding-bottom: 0;
+        border-bottom: none;
+        font-size: 20px;
+        flex-shrink: 0;
+    }
+
+    /* 调整导航组 */
+    .nav-group {
+        margin-bottom: 0;
+        display: flex;
+        gap: 10px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        flex: 1;
+        padding-left: 10px;
+        /* 移除隐藏滚动条的样式 */
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+    }
+
+    /* 自定义导航组滚动条样式 */
+    .nav-group::-webkit-scrollbar {
+        height: 4px;
+    }
+
+    .nav-group::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .nav-group::-webkit-scrollbar-thumb {
+        background-color: rgba(255, 255, 255, 0.3);
+        border-radius: 4px;
+    }
+
+    /* 调整导航标题 */
+    .nav-group h3 {
+        display: none;
+    }
+
+    /* 调整导航项 */
+    .nav-item {
+        padding: 8px 12px;
+        margin-bottom: 0;
+        font-size: 14px;
+        white-space: nowrap;
+        flex-shrink: 0;
     }
 }
