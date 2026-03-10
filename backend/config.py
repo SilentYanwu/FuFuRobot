@@ -25,6 +25,11 @@ BACKEND_PORT = int(os.getenv("BACKEND_PORT", "8000"))
 FRONTEND_HOST = os.getenv("FRONTEND_HOST", "127.0.0.1")
 FRONTEND_PORT = int(os.getenv("FRONTEND_PORT", "8080"))
 
+# =============== 语音 (TTS & STT) 配置 ===============
+# Edge-TTS 音色配置 (后续可替换为 GPT-SoVITS 的声音模型名)
+TTS_VOICE_FUFU = os.getenv("TTS_VOICE_FUFU", "zh-CN-XiaoxiaoNeural")
+TTS_VOICE_NAXIDA = os.getenv("TTS_VOICE_NAXIDA", "zh-CN-XiaoyiNeural")
+
 # 应用配置
 APP_NAME = "AI学生管理系统"
 APP_VERSION = "2.0.0"

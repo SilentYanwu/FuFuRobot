@@ -71,12 +71,11 @@ def _call_deepseek_api(prompt: str, history: List[Dict[str, str]] = None, system
             if len(_chat_history) > Tough_Memory:
                 _chat_history[:] = _chat_history[(0-Tough_Memory):]
             
-            # 将Markdown转换为HTML
-            html_content = markdown_to_html(ai_reply)
+            # 这里不再进行后端渲染，直接交由前端负责
+            # html_content = markdown_to_html(ai_reply)
             
             return {
-                "raw": ai_reply,
-                "html": html_content
+                "raw": ai_reply
             }
         else:
             raise ValueError("API响应格式错误")
@@ -90,17 +89,11 @@ def get_chat_response(user_input: str) -> Dict[str, str]:
     """
     获取AI聊天响应，返回包含raw和html格式的字典
     """
-    # 如果没有设置 API 密钥，使用模拟模式
     if not DEEPSEEK_API_KEY:
         raw_response = f"【模拟AI】收到消息：'{user_input}'。要使用真实的DeepSeek API，请在.env文件中设置DEEPSEEK_API_KEY。"
-        html_response = create_error_html(
-            f'【模拟AI】收到消息："{user_input}"。要使用真实的DeepSeek API，请在.env文件中设置DEEPSEEK_API_KEY。',
-            "info"
-        )
         
         return {
-            "raw": raw_response,
-            "html": html_response
+            "raw": raw_response
         }
     
     try:
@@ -139,17 +132,13 @@ def get_chat_response(user_input: str) -> Dict[str, str]:
         # 如果错误是因为API密钥无效，给出提示
         if "401" in error_msg or "unauthorized" in error_msg.lower():
             error_raw = "【API密钥错误】请检查.env文件中的DEEPSEEK_API_KEY是否正确。"
-            error_html = create_error_html("【API密钥错误】请检查.env文件中的DEEPSEEK_API_KEY是否正确。")
         elif "timeout" in error_msg.lower():
             error_raw = "【网络超时】API调用超时，请检查网络连接后重试。"
-            error_html = create_error_html("【网络超时】API调用超时，请检查网络连接后重试。")
         else:
             error_raw = f"【API调用失败】{error_msg}。请稍后重试。"
-            error_html = create_error_html(f"【API调用失败】{error_msg}。请稍后重试。")
         
         return {
-            "raw": error_raw,
-            "html": error_html
+            "raw": error_raw
         }
 
 def _extract_info_background(user_input: str, ai_reply: str):

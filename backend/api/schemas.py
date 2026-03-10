@@ -12,6 +12,10 @@ class ClearHistoryRequest(BaseModel):
 class TestAPIRequest(BaseModel):
     test_message: str = "你好，请介绍一下你自己"
 
+class TTSRequest(BaseModel):
+    text: str
+    mode: str = "chat" # chat or focus
+
 class SQLExecuteRequest(BaseModel):
     sql: str
 
@@ -33,10 +37,27 @@ class SystemInfoResponse(BaseModel):
 class ChatResponse(BaseModel):
     success: bool
     text: str
-    html: str
+    html: Optional[str] = None
     sql: Optional[str] = None
     data: list = []
     chart_config: dict = {}
     chart_type: str = "none"
     operation_result: Optional[dict] = None
     mode: str
+
+class ConfigSettings(BaseModel):
+    DEEPSEEK_API_KEY: str
+    DEEPSEEK_API_URL: str
+    DEEPSEEK_MODEL: str
+    DB_NAME: str
+    BACKEND_HOST: str
+    BACKEND_PORT: int
+    FRONTEND_HOST: str
+    FRONTEND_PORT: int
+
+class ConfigResponse(BaseModel):
+    success: bool
+    config: ConfigSettings
+
+class ConfigRequest(BaseModel):
+    config: ConfigSettings

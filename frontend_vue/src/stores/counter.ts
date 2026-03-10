@@ -54,14 +54,22 @@ export const useChatStore = defineStore('chat', () => {
     messages.value = []
   }
 
+  const isAutoTTSEnabled = ref(true)
+
+  const toggleAutoTTS = () => {
+    isAutoTTSEnabled.value = !isAutoTTSEnabled.value
+  }
+
   return {
     messages,
     currentMode,
     isLoading,
     chatModes,
+    isAutoTTSEnabled,
     addMessage,
     setMode,
     setLoading,
     clearMessages,
+    toggleAutoTTS,
   }
 })

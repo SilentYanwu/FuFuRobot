@@ -2,6 +2,7 @@ import { ref, nextTick } from 'vue'
 import { useChatStore } from '@/stores/counter'
 import { useChatApi } from './useApi'
 import { useCharts } from './useCharts'
+import { playAudio } from '@/utils/audio'
 import type { Message, StreamData } from '@/types'
 
 export function useChat() {
@@ -49,7 +50,7 @@ export function useChat() {
       content: '',
       role: 'ai',
       type: 'thinking',
-    })
+    }) as string
 
     let fullThinking = ''
     let fullAnswer = ''
@@ -61,13 +62,13 @@ export function useChat() {
       (data: StreamData) => {
         console.log(data)
         if (data.type === 'thinking') {
-          fullThinking += data.content
+          fullThinking += data.content || ''
           updateMessage(messageId, {
             thinking_content: fullThinking,
             type: 'answer',
           })
         } else if (data.type === 'answer') {
-          fullAnswer += data.content
+          fullAnswer += data.content || ''
           updateMessage(messageId, {
             content: fullAnswer,
             type: 'answer',
@@ -75,7 +76,8 @@ export function useChat() {
         } else if (data.type === 'error') {
           updateMessage(messageId, {
             content:
-              (fullAnswer || '') + `<br><span style="color:red">[错误: ${data.content}]</span>`,
+              (fullAnswer || '') +
+              `<br><span style="color:red">[错误: ${data.content || ''}]</span>`,
             type: 'answer',
           })
         }
@@ -89,12 +91,16 @@ export function useChat() {
             type: 'thinking',
             html: `<div class="thinking-summary">🍃 思考结束 (无回答)</div>`,
           })
+        } else if (chatStore.isAutoTTSEnabled) {
+          // 如果自动朗读开启，播放最终答案
+          playAudio(fullAnswer, 'focus')
         }
       },
       (error) => {
         updateMessage(messageId, {
           content:
-            (fullAnswer || '') + `<br><span style="color:red">[网络错误: ${error.message}]</span>`,
+            (fullAnswer || '') +
+            `<br><span style="color:red">[网络错误: ${error.message || ''}]</span>`,
           type: 'answer',
         })
       },
@@ -103,9 +109,11 @@ export function useChat() {
 
   // 处理AI响应
   const handleAIResponse = (resData: any) => {
-    const message: Partial<Message> = {
-      content: resData.html || resData.text || '收到无内容的消息',
+    const message: Message = {
+      id: `${Date.now()}-${Math.floor(Math.random() * 1000)}`, // temporary, to satisfy type checks during merge
+      content: resData.text || '收到无内容的消息',
       role: 'ai',
+      timestamp: new Date(),
       data: resData.data,
       sql: resData.sql,
       chartType: resData.chart_type,
@@ -114,6 +122,10 @@ export function useChat() {
     }
 
     chatStore.addMessage(message)
+
+    if (chatStore.isAutoTTSEnabled && (resData.text || message.html)) {
+      playAudio(resData.text || message.html || '', chatStore.currentMode)
+    }
   }
 
   // 更新消息
@@ -121,7 +133,8 @@ export function useChat() {
     const messageIndex = chatStore.messages.findIndex((msg) => msg.id === messageId)
     if (messageIndex !== -1) {
       // 创建一个新对象，合并原有消息和更新内容，确保Vue能检测到变化
-      const updatedMessage = { ...chatStore.messages[messageIndex], ...updates }
+      const updatedMessage = { ...chatStore.messages[messageIndex] } as Message
+      Object.assign(updatedMessage, updates)
       // 使用数组的splice方法触发响应式更新
       chatStore.messages.splice(messageIndex, 1, updatedMessage)
       console.log(`更新消息 ${messageId} 的内容为`)

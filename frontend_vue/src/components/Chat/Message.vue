@@ -3,7 +3,10 @@
     class="message"
     :class="[role, { 'user-message': role === 'user', 'flex-row-reverse': role === 'user' }]"
   >
-    <Avatar :role="role" />
+    <div class="avatar-container flex flex-col items-center gap-2">
+      <Avatar :role="role" />
+    </div>
+
     <div class="message-content">
       <div class="bubble">
         <!-- 思考模式 -->
@@ -25,8 +28,7 @@
 
         <!-- 普通消息 -->
         <template v-else>
-          <div v-if="html" class="markdown-content" v-html="html"></div>
-          <div v-else class="message-text" v-html="content"></div>
+          <div class="markdown-content" v-html="html ? html : renderMarkdown(content)"></div>
         </template>
 
         <!-- SQL查询显示 -->
@@ -68,12 +70,14 @@ import Avatar from '@/components/Common/Avatar.vue'
 import DataTable from '@/components/Charts/DataTable.vue'
 import ChartRenderer from '@/components/Charts/ChartRenderer.vue'
 import type { Message } from '@/types'
+import { useChatStore } from '@/stores/counter'
 
 interface Props {
   message: Message
 }
 
 const props = defineProps<Props>()
+const chatStore = useChatStore()
 
 // 使用计算属性确保响应式更新
 const content = computed(() => props.message.content)
@@ -102,7 +106,7 @@ const renderMarkdown = (text: string) => {
   return marked.parse(text)
 }
 
-const isCompleted = computed(() => type === 'answer')
+const isCompleted = computed(() => type.value === 'answer')
 </script>
 
 <style scoped>

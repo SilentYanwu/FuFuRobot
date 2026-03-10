@@ -13,8 +13,8 @@ fact_num=40
 lastly_num=40
 # AI记住的自己的AI状态信息
 aistate_num=80
-# AI记住的聊天上下文（10个对话，20条）
-savedcontext_num=20
+# AI记住的聊天上下文（30个对话，60条）
+savedcontext_num=60
 
 # 定义记忆文件路径
 MEMORY_FILE = BASE_DIR / "user_memory.json"

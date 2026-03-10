@@ -7,7 +7,8 @@ import pandas as pd
 
 from .schemas import (
     ChatRequest, ClearHistoryRequest, TestAPIRequest, 
-    SQLExecuteRequest, HealthResponse, SystemInfoResponse, ChatResponse
+    SQLExecuteRequest, HealthResponse, SystemInfoResponse, ChatResponse,
+    TTSRequest, ConfigResponse, ConfigRequest, ConfigSettings
 )
 from backend.database import (
     execute_safe_sql, get_table_info, check_db_connection
@@ -18,7 +19,8 @@ from backend.llm import (
     get_nahida_response, get_chat_response, get_db_response,stream_nahida_response
 )
 
-from backend.config import DEEPSEEK_API_KEY
+from backend.config import DEEPSEEK_API_KEY, TTS_VOICE_FUFU, TTS_VOICE_NAXIDA
+from backend.utils.tts import generate_audio_stream
 
 router = APIRouter(prefix="/api", tags=["api"])
 
@@ -50,6 +52,53 @@ async def db_info():
     """获取数据库信息"""
     return get_table_info()
 
+@router.get("/config", response_model=ConfigResponse)
+async def get_config():
+    """获取当前配置信息"""
+    import os
+    from backend.config import BASE_DIR
+    from dotenv import dotenv_values
+    
+    # 从.env文件读取以获取最准确的当前配置
+    env_path = BASE_DIR / ".env"
+    env_dict = dotenv_values(env_path) if env_path.exists() else {}
+    
+    config = ConfigSettings(
+        DEEPSEEK_API_KEY=env_dict.get("DEEPSEEK_API_KEY", os.getenv("DEEPSEEK_API_KEY", "")),
+        DEEPSEEK_API_URL=env_dict.get("DEEPSEEK_API_URL", os.getenv("DEEPSEEK_API_URL", "https://api.deepseek.com/chat/completions")),
+        DEEPSEEK_MODEL=env_dict.get("DEEPSEEK_MODEL", os.getenv("DEEPSEEK_MODEL", "deepseek-chat")),
+        DB_NAME=env_dict.get("DB_NAME", os.getenv("DB_NAME", "students.db")),
+        BACKEND_HOST=env_dict.get("BACKEND_HOST", os.getenv("BACKEND_HOST", "127.0.0.1")),
+        BACKEND_PORT=int(env_dict.get("BACKEND_PORT", os.getenv("BACKEND_PORT", "8000"))),
+        FRONTEND_HOST=env_dict.get("FRONTEND_HOST", os.getenv("FRONTEND_HOST", "127.0.0.1")),
+        FRONTEND_PORT=int(env_dict.get("FRONTEND_PORT", os.getenv("FRONTEND_PORT", "8080")))
+    )
+    
+    return {"success": True, "config": config}
+
+@router.post("/config", response_model=ConfigResponse)
+async def update_config(request: ConfigRequest):
+    """更新配置信息并保存到.env文件"""
+    import dotenv
+    from backend.config import BASE_DIR
+    
+    env_path = BASE_DIR / ".env"
+    
+    try:
+        # 如果文件不存在，创建一个空文件
+        if not env_path.exists():
+            env_path.touch()
+            
+        settings = request.config.dict()
+        
+        # 逐个更新配置项
+        for key, value in settings.items():
+            dotenv.set_key(str(env_path), key, str(value))
+            
+        return {"success": True, "config": request.config}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"保存配置失败: {str(e)}")
+
 @router.post("/test-api")
 async def test_api_endpoint(request: TestAPIRequest):
     """测试DeepSeek API端点"""
@@ -61,7 +110,6 @@ async def test_api_endpoint(request: TestAPIRequest):
             "success": True,
             "test_message": test_message,
             "raw_response": response["raw"],
-            "html_response": response["html"],
             "api_configured": bool(DEEPSEEK_API_KEY)
         }
     except Exception as e:
@@ -103,6 +151,24 @@ async def clear_history_endpoint(request: ClearHistoryRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"清除历史失败: {str(e)}")
 
+@router.post("/tts")
+async def tts_endpoint(request: TTSRequest):
+    """文本转语音端点"""
+    try:
+        text = request.text.strip()
+        if not text:
+            raise HTTPException(status_code=400, detail="文本不能为空")
+            
+        # 根据模式选择音色
+        voice = TTS_VOICE_NAXIDA if request.mode == "focus" else TTS_VOICE_FUFU
+        
+        return StreamingResponse(
+            generate_audio_stream(text, voice),
+            media_type="audio/mpeg"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"TTS生成失败: {str(e)}")
+
 # 流式输出端口
 @router.post("/chat/stream")
 async def chat_stream_endpoint(request: ChatRequest):
@@ -142,7 +208,6 @@ async def chat_endpoint(request: ChatRequest):
         return {
             "success": False,
             "text": "请输入有效的问题",
-            "html": '<div class="error"><p>请输入有效的问题</p></div>',
             "sql": None,
             "data": [],
             "chart_config": {},
@@ -154,7 +219,6 @@ async def chat_endpoint(request: ChatRequest):
     result = {
         "success": True,
         "text": "",           # 原始文本
-        "html": "",          # HTML格式内容
         "sql": None, 
         "data": [],
         "chart_config": {},
@@ -168,12 +232,10 @@ async def chat_endpoint(request: ChatRequest):
             # 使用DeepSeek API进行聊天
             response = get_chat_response(user_input)
             result["text"] = response["raw"]
-            result["html"] = response["html"]
         elif mode == "focus":
             # 2. 新增的纳西妲模式 (无记忆，深度思考)
             response = get_nahida_response(user_input)
             result["text"] = response["raw"]
-            result["html"] = response["html"]
             # 纳西妲模式不涉及 SQL 操作，所以不需要后续逻辑
         elif mode == "text2sql":
             # 使用AI生成SQL
@@ -185,13 +247,10 @@ async def chat_endpoint(request: ChatRequest):
             
             if not sql_result["success"]:
                 result["success"] = False
-                result["text"] = f"SQL执行错误: {sql_result['error']}"
-                result["html"] = f'<div class="error"><p>SQL执行错误: {sql_result["error"]}</p></div>'
-                result["html"] += response["html"]  # 仍然显示生成的SQL
+                result["text"] = f"SQL执行错误: {sql_result['error']}\n\n```sql\n{sql_query}\n```"
             else:
                 result["sql"] = sql_query
                 result["data"] = sql_result["data"]
-                result["html"] = response["html"]  # 显示SQL查询
                 
                 # 根据SQL类型处理
                 if sql_result["sql_type"] == "SELECT":
@@ -223,9 +282,6 @@ async def chat_endpoint(request: ChatRequest):
                         summary += f" 智能推荐使用{chart_name}展示。"
                     
                     result["text"] = summary
-                    
-                    # 添加总结到HTML
-                    result["html"] += f'<div class="query-summary"><p>{summary}</p></div>'
                 
                 else:
                     # 对于增删改操作，显示操作结果
@@ -239,26 +295,16 @@ async def chat_endpoint(request: ChatRequest):
                         result["text"] = f"更新成功！{operation_data.get('message', '记录已更新')}"
                     elif operation_type == "DELETE":
                         result["text"] = f"删除成功！{operation_data.get('message', '记录已删除')}"
-                    
-                    # 添加操作结果到HTML
-                    result["html"] += f'''
-                    <div class="operation-result success">
-                        <p>{result["text"]}</p>
-                        <small>操作类型: {operation_type}</small>
-                    </div>
-                    '''
         
         else:
             result["success"] = False
             result["text"] = f"未知的模式: {mode}"
-            result["html"] = f'<div class="error"><p>未知的模式: {mode}</p></div>'
                 
     except Exception as e:
         error_msg = f"处理请求时发生错误: {str(e)}"
         print(f"API错误: {error_msg}")
         result["success"] = False
         result["text"] = error_msg
-        result["html"] = f'<div class="error"><p>{error_msg}</p></div>'
     
     return result
 
