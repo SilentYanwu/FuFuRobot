@@ -213,6 +213,7 @@ async def chat_endpoint(request: ChatRequest):
             "chart_config": {},
             "chart_type": "none",
             "operation_result": None,
+            "gobang": None,
             "mode": mode
         }
     
@@ -224,6 +225,7 @@ async def chat_endpoint(request: ChatRequest):
         "chart_config": {},
         "chart_type": "none",
         "operation_result": None,  # 操作结果（用于INSERT/UPDATE/DELETE）
+        "gobang": None,
         "mode": mode
     }
     
@@ -232,6 +234,7 @@ async def chat_endpoint(request: ChatRequest):
             # 使用DeepSeek API进行聊天
             response = get_chat_response(user_input)
             result["text"] = response["raw"]
+            result["gobang"] = response.get("gobang")
         elif mode == "focus":
             # 2. 新增的纳西妲模式 (无记忆，深度思考)
             response = get_nahida_response(user_input)

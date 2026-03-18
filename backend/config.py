@@ -18,6 +18,7 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 DEEPSEEK_API_URL = os.getenv("DEEPSEEK_API_URL", "https://api.deepseek.com/chat/completions")
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
 DEEPSEEK_REASONER_MODEL = os.getenv("DEEPSEEK_REASONER_MODEL", "deepseek-reasoner")
+GOBANG_INTENT_MODEL = os.getenv("GOBANG_INTENT_MODEL", DEEPSEEK_REASONER_MODEL)
 
 # 服务器配置
 BACKEND_HOST = os.getenv("BACKEND_HOST", "127.0.0.1")

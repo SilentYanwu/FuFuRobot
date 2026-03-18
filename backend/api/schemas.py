@@ -34,6 +34,12 @@ class SystemInfoResponse(BaseModel):
     database: str
     features: list
 
+class GobangIntent(BaseModel):
+    mentioned: bool = False
+    should_open: bool = False
+    confidence: float = 0.0
+    reason: str = ""
+
 class ChatResponse(BaseModel):
     success: bool
     text: str
@@ -43,6 +49,7 @@ class ChatResponse(BaseModel):
     chart_config: dict = {}
     chart_type: str = "none"
     operation_result: Optional[dict] = None
+    gobang: Optional[GobangIntent] = None
     mode: str
 
 class ConfigSettings(BaseModel):

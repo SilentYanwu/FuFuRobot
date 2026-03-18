@@ -1,22 +1,212 @@
 # backend/llm/chat_mode.py
 import threading
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import requests
 import json
+import re
 from .memory_manager import memory_manager
 from backend.utils import markdown_to_html, create_error_html
-from backend.config import DEEPSEEK_API_KEY, DEEPSEEK_API_URL, DEEPSEEK_MODEL, FUFU_PROMPT
+from backend.config import (
+    DEEPSEEK_API_KEY,
+    DEEPSEEK_API_URL,
+    DEEPSEEK_MODEL,
+    DEEPSEEK_REASONER_MODEL,
+    GOBANG_INTENT_MODEL,
+    FUFU_PROMPT,
+)
 
 # 全局变量用于存储聊天历史
 _chat_history = []
 # 聊天历史最大消息数
 Tough_Memory = 80
+GOBANG_POSITIVE_PATTERNS = [
+    r"想(?:和你)?下五子棋",
+    r"来(?:一局|一盘|一把)五子棋",
+    r"(?:一起|陪我)下五子棋",
+    r"开始(?:下|玩)?五子棋",
+    r"(?:要|想|准备)玩五子棋",
+    r"下五子棋吧",
+]
+GOBANG_NEGATIVE_PATTERNS = [
+    r"(?:不想|不喜欢|讨厌|反感|拒绝)玩?五子棋",
+    r"不(?:会|要|想)下五子棋",
+    r"别(?:下|玩)五子棋",
+    r"五子棋.*(?:无聊|没意思|烦)",
+    r"不想和你下",
+    r"先不下",
+    r"不下了",
+]
 
 # 在启动时加载保存的对话上下文结尾，为了使其不忘记最近的话。
 saved_context = memory_manager.get_saved_context()
 if saved_context:
     _chat_history.extend(saved_context)
     print(f"🔄 [系统] 已恢复上次最后的 {len(saved_context)} 条对话记录")
+
+
+def _contains_gobang_keyword(text: str) -> bool:
+    """
+    是否提到五子棋相关关键词
+    """
+    lower_text = text.lower()
+    return ("五子棋" in text) or ("连珠" in text) or ("gomoku" in lower_text)
+
+
+def _clip_confidence(value: Any, default: float = 0.0) -> float:
+    try:
+        confidence = float(value)
+    except (TypeError, ValueError):
+        confidence = default
+    return max(0.0, min(1.0, confidence))
+
+
+def _to_gobang_payload(intent: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "mentioned": bool(intent.get("mentioned", False)),
+        "should_open": bool(intent.get("want_play", False)),
+        "confidence": _clip_confidence(intent.get("confidence", 0.0)),
+        "reason": str(intent.get("reason", "")).strip(),
+    }
+
+
+def _fallback_gobang_intent(user_input: str) -> Dict[str, Any]:
+    """
+    API不可用时的兜底规则，优先规避“提到五子棋但并不想玩”的误触发。
+    """
+    if not _contains_gobang_keyword(user_input):
+        return {
+            "mentioned": False,
+            "want_play": False,
+            "confidence": 0.0,
+            "reason": "未提及五子棋关键词",
+        }
+
+    positive_hit = any(re.search(pattern, user_input) for pattern in GOBANG_POSITIVE_PATTERNS)
+    negative_hit = any(re.search(pattern, user_input) for pattern in GOBANG_NEGATIVE_PATTERNS)
+
+    if positive_hit and not negative_hit:
+        return {
+            "mentioned": True,
+            "want_play": True,
+            "confidence": 0.86,
+            "reason": "规则判断为明确发起对弈请求",
+        }
+
+    if negative_hit and not positive_hit:
+        return {
+            "mentioned": True,
+            "want_play": False,
+            "confidence": 0.9,
+            "reason": "规则判断为明确拒绝或负向表达",
+        }
+
+    if positive_hit and negative_hit:
+        return {
+            "mentioned": True,
+            "want_play": False,
+            "confidence": 0.6,
+            "reason": "同句存在正负冲突表达，默认不触发",
+        }
+
+    return {
+        "mentioned": True,
+        "want_play": False,
+        "confidence": 0.35,
+        "reason": "仅提及五子棋但未出现明确对弈意图",
+    }
+
+
+def _build_recent_chat_snippet(history: Optional[List[Dict[str, str]]], max_messages: int = 8) -> str:
+    if not history:
+        return "无"
+
+    lines: List[str] = []
+    for msg in history[-max_messages:]:
+        role = "用户" if msg.get("role") == "user" else "助手"
+        content = (msg.get("content") or "").strip().replace("\n", " ")
+        if content:
+            lines.append(f"{role}: {content}")
+
+    return "\n".join(lines) if lines else "无"
+
+
+def detect_gobang_intent(user_input: str, history: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
+    """
+    专门判断“用户提到五子棋时是否真的想开始对弈”。
+    只在命中关键词时调用意图模型，否则直接返回默认值。
+    """
+    if not _contains_gobang_keyword(user_input):
+        return {
+            "mentioned": False,
+            "want_play": False,
+            "confidence": 0.0,
+            "reason": "未提及五子棋关键词",
+        }
+
+    # 无密钥时只能走规则兜底
+    if not DEEPSEEK_API_KEY:
+        return _fallback_gobang_intent(user_input)
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+    }
+
+    intent_system_prompt = """
+你是“对弈意图分类器”，只做一件事：判断用户是否在发起/接受五子棋对弈。
+请只输出 JSON 对象，不要输出 Markdown。
+字段要求：
+{
+  "mentioned": true,
+  "want_play": true 或 false,
+  "confidence": 0 到 1 的数字,
+  "reason": "一句简短中文理由"
+}
+判定原则：
+1. 用户明确提出“下五子棋/来一局/开始吧/一起下” => want_play=true
+2. 用户明确否定、抱怨、拒绝（如“讨厌五子棋”“不想下”）=> want_play=false
+3. 只是讨论、评价、问规则、问能力，或语义不确定 => want_play=false
+4. 宁可保守，不要误判成 true
+"""
+
+    intent_user_prompt = f"""
+最近聊天上下文（可能为空）：
+{_build_recent_chat_snippet(history)}
+
+用户最新输入：
+{user_input}
+"""
+
+    payload = {
+        "model": GOBANG_INTENT_MODEL or DEEPSEEK_REASONER_MODEL,
+        "messages": [
+            {"role": "system", "content": intent_system_prompt.strip()},
+            {"role": "user", "content": intent_user_prompt.strip()},
+        ],
+        "temperature": 0.1,
+        "max_tokens": 256,
+        "response_format": {"type": "json_object"},
+    }
+
+    try:
+        response = requests.post(DEEPSEEK_API_URL, headers=headers, json=payload, timeout=20)
+        response.raise_for_status()
+
+        data = response.json()
+        raw_content = data["choices"][0]["message"]["content"]
+        raw_content = raw_content.replace("```json", "").replace("```", "").strip()
+        parsed = json.loads(raw_content)
+
+        return {
+            "mentioned": True,
+            "want_play": bool(parsed.get("want_play", False)),
+            "confidence": _clip_confidence(parsed.get("confidence", 0.0)),
+            "reason": str(parsed.get("reason", "模型未提供理由")).strip(),
+        }
+    except Exception:
+        fallback = _fallback_gobang_intent(user_input)
+        fallback["reason"] = f"{fallback['reason']}（意图模型不可用，已走规则兜底）"
+        return fallback
 
 def _call_deepseek_api(prompt: str, history: List[Dict[str, str]] = None, system_prompt: str = None) -> Dict[str, str]:
     """
@@ -85,15 +275,19 @@ def _call_deepseek_api(prompt: str, history: List[Dict[str, str]] = None, system
     except (KeyError, IndexError) as e:
         raise Exception(f"解析API响应失败: {str(e)}")
 
-def get_chat_response(user_input: str) -> Dict[str, str]:
+def get_chat_response(user_input: str) -> Dict[str, Any]:
     """
     获取AI聊天响应，返回包含raw和html格式的字典
     """
+    recent_history = _chat_history[(0-Tough_Memory):]
+    gobang_intent = detect_gobang_intent(user_input, recent_history)
+
     if not DEEPSEEK_API_KEY:
         raw_response = f"【模拟AI】收到消息：'{user_input}'。要使用真实的DeepSeek API，请在.env文件中设置DEEPSEEK_API_KEY。"
         
         return {
-            "raw": raw_response
+            "raw": raw_response,
+            "gobang": _to_gobang_payload(gobang_intent),
         }
     
     try:
@@ -101,9 +295,6 @@ def get_chat_response(user_input: str) -> Dict[str, str]:
         # 1. 准备 System Prompt (人设 + 长期的记忆点)
         memory_context = memory_manager.get_memory_context()
         full_system_prompt = FUFU_PROMPT + memory_context
-        
-        # 使用最近的聊天历史（最多最近的40轮对话）
-        recent_history = _chat_history[(0-Tough_Memory):] 
         
         # 调用 DeepSeek API
         response = _call_deepseek_api(
@@ -123,6 +314,7 @@ def get_chat_response(user_input: str) -> Dict[str, str]:
             )
             thread.daemon = True # 设置为守护线程
             thread.start()
+        response["gobang"] = _to_gobang_payload(gobang_intent)
         return response
         
     except Exception as e:
@@ -138,7 +330,8 @@ def get_chat_response(user_input: str) -> Dict[str, str]:
             error_raw = f"【API调用失败】{error_msg}。请稍后重试。"
         
         return {
-            "raw": error_raw
+            "raw": error_raw,
+            "gobang": _to_gobang_payload(gobang_intent),
         }
 
 def _extract_info_background(user_input: str, ai_reply: str):

@@ -3,7 +3,7 @@ import { useChatStore } from '@/stores/counter'
 import { useChatApi } from './useApi'
 import { useCharts } from './useCharts'
 import { playAudio } from '@/utils/audio'
-import type { Message, StreamData } from '@/types'
+import type { ApiResponse, Message, StreamData } from '@/types'
 
 export function useChat() {
   const chatStore = useChatStore()
@@ -13,8 +13,8 @@ export function useChat() {
   const messagesContainer = ref<HTMLElement | null>(null)
 
   // 发送消息
-  const sendMessage = async (text: string) => {
-    if (!text.trim()) return
+  const sendMessage = async (text: string): Promise<ApiResponse | null> => {
+    if (!text.trim()) return null
 
     // 添加用户消息
     chatStore.addMessage({
@@ -23,6 +23,7 @@ export function useChat() {
     })
 
     const mode = chatStore.currentMode
+    let apiResponse: ApiResponse | null = null
 
     // 处理不同模式的消息
     if (mode === 'focus') {
@@ -32,6 +33,7 @@ export function useChat() {
       try {
         const resData = await sendChatMessage(text, mode)
         handleAIResponse(resData)
+        apiResponse = resData
       } catch (error) {
         handleError(error as Error)
       } finally {
@@ -41,6 +43,8 @@ export function useChat() {
 
     // 滚动到底部
     await scrollToBottom()
+
+    return apiResponse
   }
 
   // 处理流式聚焦模式的聊天响应
@@ -108,7 +112,7 @@ export function useChat() {
   }
 
   // 处理AI响应
-  const handleAIResponse = (resData: any) => {
+  const handleAIResponse = (resData: ApiResponse) => {
     const message: Message = {
       id: `${Date.now()}-${Math.floor(Math.random() * 1000)}`, // temporary, to satisfy type checks during merge
       content: resData.text || '收到无内容的消息',

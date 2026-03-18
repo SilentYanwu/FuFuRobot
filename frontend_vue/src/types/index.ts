@@ -22,7 +22,15 @@ export interface ChatMode {
   description: string
 }
 
+export interface GobangIntentResponse {
+  mentioned: boolean
+  should_open: boolean
+  confidence: number
+  reason: string
+}
+
 export interface ApiResponse {
+  success?: boolean
   text?: string
   html?: string
   data?: any[]
@@ -30,6 +38,7 @@ export interface ApiResponse {
   chart_config?: any
   sql?: string
   operation_result?: any
+  gobang?: GobangIntentResponse | null
 }
 
 export interface StreamData {

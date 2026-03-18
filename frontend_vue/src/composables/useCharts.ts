@@ -41,10 +41,17 @@ export function useCharts() {
     }
   }
 
+  // 把配置字段统一为可索引的字符串键，避免 string[] / undefined 触发类型错误
+  const normalizeField = (field: string | string[] | undefined, fallback = ''): string => {
+    if (typeof field === 'string') return field
+    if (Array.isArray(field)) return field[0] || fallback
+    return fallback
+  }
+
   // 柱状图配置
   const generateBarChartOption = (data: any[], config: ChartOption) => {
-    const xAxis = config.x_axis || getDefaultXAxis(data)
-    const yAxis = config.y_axis || getDefaultYAxis(data)
+    const xAxis = normalizeField(config.x_axis, getDefaultXAxis(data))
+    const yAxis = normalizeField(config.y_axis, getDefaultYAxis(data))
     const title = config.title || `${yAxis} 按 ${xAxis} 统计`
 
     // 提取数据
@@ -60,7 +67,7 @@ export function useCharts() {
 
     // 排序
     if (config.sorted) {
-      const combined = xData.map((x, i) => ({ x, y: yData[i] }))
+      const combined = xData.map((x, i) => ({ x, y: yData[i] ?? 0 }))
       combined.sort((a, b) => {
         if (config.sortOrder === 'asc') {
           return a.y - b.y
@@ -78,7 +85,7 @@ export function useCharts() {
     }
 
     // 限制数据数量
-    if (config.limit && xData.length > config.limit) {
+    if (typeof config.limit === 'number' && xData.length > config.limit) {
       xData.splice(config.limit)
       yData.splice(config.limit)
     }
@@ -158,8 +165,8 @@ export function useCharts() {
 
   // 折线图配置
   const generateLineChartOption = (data: any[], config: ChartOption) => {
-    const xField = config.x_axis || getDefaultXAxis(data) // 改为 xField 表示X轴字段名
-    const yField = config.y_axis || getDefaultYAxis(data) // 改为 yField 表示Y轴字段名
+    const xField = normalizeField(config.x_axis, getDefaultXAxis(data)) // 改为 xField 表示X轴字段名
+    const yField = normalizeField(config.y_axis, getDefaultYAxis(data)) // 改为 yField 表示Y轴字段名
     const title = config.title || `${yField} 趋势图`
 
     // 提取数据 - 使用正确的字段名
@@ -236,8 +243,8 @@ export function useCharts() {
 
   // 饼图配置
   const generatePieChartOption = (data: any[], config: ChartOption) => {
-    const nameCol = config.name_col || getDefaultXAxis(data)
-    const valueCol = config.value_col || getDefaultYAxis(data)
+    const nameCol = normalizeField(config.name_col, getDefaultXAxis(data))
+    const valueCol = normalizeField(config.value_col, getDefaultYAxis(data))
     const title = config.title || `${nameCol} 分布`
 
     console.log('data', data)
@@ -268,7 +275,7 @@ export function useCharts() {
     }
 
     // 限制数量
-    if (config.limit && pieData.length > config.limit) {
+    if (typeof config.limit === 'number' && pieData.length > config.limit) {
       pieData.splice(config.limit)
     }
 
@@ -370,8 +377,8 @@ export function useCharts() {
 
   // 散点图配置
   const generateScatterChartOption = (data: any[], config: ChartOption) => {
-    const xAxis = config.x_axis || getDefaultXAxis(data)
-    const yAxis = config.y_axis || getDefaultYAxis(data)
+    const xAxis = normalizeField(config.x_axis, getDefaultXAxis(data))
+    const yAxis = normalizeField(config.y_axis, getDefaultYAxis(data))
     const title = config.title || `${yAxis} 与 ${xAxis} 关系`
 
     // 提取数据
@@ -428,7 +435,8 @@ export function useCharts() {
           type: 'scatter',
           data: scatterData,
           symbolSize: (value: number[]) => {
-            return Math.sqrt(value[1]) / 5 + 8
+            const yValue = value?.[1] ?? 0
+            return Math.sqrt(yValue) / 5 + 8
           },
           itemStyle: {
             color: (params: any) => {
@@ -451,8 +459,12 @@ export function useCharts() {
   // 面积图配置
   const generateAreaChartOption = (data: any[], config: ChartOption) => {
     const lineOption = generateLineChartOption(data, config)
-    if (lineOption.series && lineOption.series[0]) {
-      lineOption.series[0].areaStyle = {
+    const firstSeries = Array.isArray(lineOption.series)
+      ? (lineOption.series[0] as Record<string, any> | undefined)
+      : undefined
+
+    if (firstSeries) {
+      firstSeries.areaStyle = {
         color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
           { offset: 0, color: 'rgba(58, 77, 233, 0.8)' },
           { offset: 1, color: 'rgba(58, 77, 233, 0.1)' },

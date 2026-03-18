@@ -27,6 +27,12 @@
     />
 
     <SettingsModal :isOpen="isSettingsOpen" @close="isSettingsOpen = false" />
+
+    <GobangModal
+      :visible="isGobangOpen"
+      :trigger-reason="gobangTriggerReason"
+      @close="closeGobangModal"
+    />
   </div>
 </template>
 
@@ -39,6 +45,7 @@ import { storeToRefs } from 'pinia'
 import MessageList from './MessageList.vue'
 import MessageInput from './MessageInput.vue'
 import SettingsModal from '@/components/Common/SettingsModal.vue'
+import GobangModal from './GobangModal.vue'
 
 const chatStore = useChatStore()
 const { isLoading } = chatStore
@@ -49,10 +56,20 @@ const { messagesContainer, sendMessage, getInputPlaceholder, showWelcomeMessage 
 const messageListRef = ref<InstanceType<typeof MessageList> | null>(null)
 const inputPlaceholder = ref('')
 const isSettingsOpen = ref(false)
+const isGobangOpen = ref(false)
+const gobangTriggerReason = ref('')
 
 // 处理发送消息
-const handleSendMessage = (text: string) => {
-  sendMessage(text)
+const handleSendMessage = async (text: string) => {
+  const response = await sendMessage(text)
+  if (response?.gobang?.should_open) {
+    gobangTriggerReason.value = response.gobang.reason || '识别到你想来一局五子棋。'
+    isGobangOpen.value = true
+  }
+}
+
+const closeGobangModal = () => {
+  isGobangOpen.value = false
 }
 
 // 初始化
